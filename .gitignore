@@ -1,0 +1,23 @@
+# 编译生成文件
+build/
+dist/
+*.spec
+
+# Python缓存文件
+__pycache__/
+*.py[cod]
+
+# 环境文件
+.env
+.venv
+
+# 编辑器文件
+.vscode/
+.idea/
+
+# 数据库文件
+*.db
+*.sqlite
+
+# 日志文件
+*.log
