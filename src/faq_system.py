@@ -319,71 +319,88 @@ class FAQSystem(QMainWindow):
         return result[0] if result else 0
 
     def add_faq(self):
+        from PyQt5.QtWidgets import QMessageBox
         dialog = FAQDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            max_id = self.get_max_original_id()
-            new_id = max_id + 1 if max_id else 1
-            self.cursor.execute('''
-                INSERT INTO faqs (original_id, app_name, question, solution, notes)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                new_id,
-                dialog.app_name.text(),
-                dialog.question.text(),
-                dialog.solution.toPlainText(),
-                dialog.notes.toPlainText()
-            ))
-            self.conn.commit()
-            self.data_modified = True
-            self.sync_to_excel()
-            self.load_data()
+            try:
+                max_id = self.get_max_original_id()
+                new_id = max_id + 1 if max_id else 1
+                self.cursor.execute('''
+                    INSERT INTO faqs (original_id, app_name, question, solution, notes)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    new_id,
+                    dialog.app_name.text().strip(),
+                    dialog.question.text().strip(),
+                    dialog.solution.toPlainText().strip(),
+                    dialog.notes.toPlainText().strip()
+                ))
+                self.conn.commit()
+                self.data_modified = True
+                self.sync_to_excel()
+                self.load_data()
+                QMessageBox.information(self, "成功", "FAQ添加成功")
+            except Exception as e:
+                self.conn.rollback()
+                QMessageBox.critical(self, "错误", f"添加失败: {str(e)}")
             
     def edit_faq(self):
+        from PyQt5.QtWidgets import QMessageBox
         faq_id = self.get_selected_faq_id()
         if faq_id is None:
-            return
-        
-        self.cursor.execute('SELECT * FROM faqs WHERE id = ?', (faq_id,))
-        faq_data = self.cursor.fetchone()
-        
-        dialog = FAQDialog(self, faq_data)
-        if dialog.exec_() == QDialog.Accepted:
-            self.cursor.execute('''
-                UPDATE faqs SET
-                    app_name = ?,
-                    question = ?,
-                    solution = ?,
-                    notes = ?
-                WHERE id = ?
-            ''', (
-                dialog.app_name.text(),
-                dialog.question.text(),
-                dialog.solution.toPlainText(),
-                dialog.notes.toPlainText(),
-                faq_id
-            ))
-            self.conn.commit()
-            self.data_modified = True
-            self.sync_to_excel()
-            self.load_data()
-            
-    def view_faq(self):
-        faq_id = self.get_selected_faq_id()
-        if faq_id is None:
-            print("请先选择要查看的行")
+            QMessageBox.warning(self, "提示", "请先选择要编辑的记录")
             return
         
         try:
             self.cursor.execute('SELECT * FROM faqs WHERE id = ?', (faq_id,))
             faq_data = self.cursor.fetchone()
             if not faq_data:
-                print("未找到对应的FAQ记录")
+                QMessageBox.warning(self, "错误", "未找到选择的记录")
+                return
+            
+            dialog = FAQDialog(self, faq_data)
+            if dialog.exec_() == QDialog.Accepted:
+                self.cursor.execute('''
+                    UPDATE faqs SET
+                        app_name = ?,
+                        question = ?,
+                        solution = ?,
+                        notes = ?
+                    WHERE id = ?
+                ''', (
+                    dialog.app_name.text().strip(),
+                    dialog.question.text().strip(),
+                    dialog.solution.toPlainText().strip(),
+                    dialog.notes.toPlainText().strip(),
+                    faq_id
+                ))
+                self.conn.commit()
+                self.data_modified = True
+                self.sync_to_excel()
+                self.load_data()
+                QMessageBox.information(self, "成功", "修改已保存")
+        except Exception as e:
+            self.conn.rollback()
+            QMessageBox.critical(self, "错误", f"编辑失败: {str(e)}")
+            
+    def view_faq(self):
+        from PyQt5.QtWidgets import QMessageBox
+        faq_id = self.get_selected_faq_id()
+        if faq_id is None:
+            QMessageBox.warning(self, "提示", "请先选择要查看的记录")
+            return
+        
+        try:
+            self.cursor.execute('SELECT * FROM faqs WHERE id = ?', (faq_id,))
+            faq_data = self.cursor.fetchone()
+            if not faq_data:
+                QMessageBox.warning(self, "错误", "未找到选择的记录")
                 return
             
             dialog = FAQViewDialog(self, faq_data)
             dialog.exec_()
         except Exception as e:
-            print(f"查看FAQ时发生错误: {str(e)}")
+            QMessageBox.critical(self, "错误", f"查看失败: {str(e)}")
 
     def delete_faq(self):
         faq_id = self.get_selected_faq_id()
