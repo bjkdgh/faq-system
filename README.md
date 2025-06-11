@@ -68,7 +68,7 @@ pip install -r requirements-dev.txt
 pytest tests/
 
 # 打包程序
-pyinstaller --clean faq_system.spec
+python -m PyInstaller faq_system.spec
 ```
 
 ## 贡献说明
