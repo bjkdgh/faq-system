@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 class FAQViewDialog(QDialog):
     def __init__(self, parent=None, faq_data=None):
         super().__init__(parent)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setWindowTitle('查看FAQ')
         self.resize(800, 600)
         
@@ -112,6 +113,7 @@ class FAQDialog(QDialog):
 class FAQSystem(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.current_excel_path = None
         self.data_modified = False
         self.initUI()
@@ -149,6 +151,12 @@ class FAQSystem(QMainWindow):
         export_action = QAction('导出', self)
         export_action.triggered.connect(self.export_excel)
         file_menu.addAction(export_action)
+
+        # 添加关于菜单
+        about_menu = menu_bar.addMenu('关于')
+        about_action = QAction('关于', self)
+        about_action.triggered.connect(self.show_about)
+        about_menu.addAction(about_action)
         
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -201,16 +209,31 @@ class FAQSystem(QMainWindow):
         self.table_view.doubleClicked.connect(lambda: self.view_faq(by_index=True))
         
     def search_faq(self):
-        keyword = self.search_input.text().strip()
+        input_text = self.search_input.text().strip()
         model = QStandardItemModel()
         model.setHorizontalHeaderLabels(['所属应用', '问题', '解决方法', '备注'])
         
-        if keyword:
-            self.cursor.execute('''
-                SELECT app_name, question, solution, notes 
-                FROM faqs 
-                WHERE question LIKE ? OR solution LIKE ?
-            ''', (f'%{keyword}%', f'%{keyword}%'))
+        if input_text:
+            # 使用&作为分隔符，保留原始空格（不进行strip）
+            keywords = [k for k in input_text.split('&') if k]
+            
+            if keywords:
+                # 构建SQL条件和参数
+                conditions = []
+                params = []
+                for kw in keywords:
+                    conditions.append('(app_name LIKE ? OR question LIKE ? OR solution LIKE ? OR notes LIKE ?)')
+                    params.extend([f'%{kw}%', f'%{kw}%', f'%{kw}%', f'%{kw}%'])
+                
+                sql = '''
+                    SELECT app_name, question, solution, notes 
+                    FROM faqs 
+                    WHERE {}
+                '''.format(' AND '.join(conditions))
+                
+                self.cursor.execute(sql, params)
+            else:
+                self.cursor.execute('SELECT app_name, question, solution, notes FROM faqs')
         else:
             self.cursor.execute('SELECT app_name, question, solution, notes FROM faqs')
             
@@ -383,9 +406,9 @@ class FAQSystem(QMainWindow):
             self.conn.rollback()
             QMessageBox.critical(self, "错误", f"编辑失败: {str(e)}")
             
-    def view_faq(self):
+    def view_faq(self, by_index=False):
         from PyQt5.QtWidgets import QMessageBox
-        faq_id = self.get_selected_faq_id()
+        faq_id = self.get_selected_faq_id(by_index=by_index)
         if faq_id is None:
             QMessageBox.warning(self, "提示", "请先选择要查看的记录")
             return
@@ -429,6 +452,19 @@ class FAQSystem(QMainWindow):
         self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_question ON faqs(question)')
         self.conn.commit()
         self.load_data()
+
+    def show_about(self):
+        from PyQt5.QtWidgets import QMessageBox
+        about_text = (
+            "1. 一个基于PyQt5和SQLite的专业FAQ知识库管理系统，提供完整的Excel数据导入导出解决方案。\n\n"
+            "2. 核心功能\n"
+            "   - 📁 Excel文件导入/导出（支持.xlsx格式），用于批量导入数据库\n"
+            "   - 🔍 多条件组合查询与关键字搜索，使用”&“\n"
+            "   - ✏️ FAQ条目增删改查（CRUD）操作\n"
+            "   - 🔄 数据自动保存与恢复\n\n"
+            "3. 作者：郭浩"
+        )
+        QMessageBox.information(self, "关于", about_text)
 
     def create_context_menu(self, position):
         menu = QMenu()
